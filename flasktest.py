@@ -1,4 +1,4 @@
-#Author: Ekram
+
 #Made 26/11/2016
 
 from flask import Flask, render_template, request, url_for
