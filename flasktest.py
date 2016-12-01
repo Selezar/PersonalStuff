@@ -1,11 +1,13 @@
+'''
+This is a flask file containing a lot of useful and experimental web scraping code. Everything is mainly placed here so that the user can use the browser as an interface and not need to create a custom GUI with Tkinter. Websites scraped include Erolord,HentaiBox,Tumblr.
+Another function included edits text file as well. This code also exercises and implements historic record management of code with text files
 
-#Made 26/11/2016
+'''
 
 from flask import Flask, render_template, request, url_for
 import urllib
 import urlparse
 from random import randint
-import requests
 from bs4 import BeautifulSoup
 import os
 import urllib2
@@ -41,7 +43,7 @@ def RootCrawler():
     
     p=0
     while p<len(urls):
-        r = requests.get(urls[p])
+        r = urllib.urlopen(urls[p]).read()
         soup = BeautifulSoup(r.content)
         x = soup.find_all("img")
 
@@ -790,9 +792,90 @@ def UpdateDownloadFolder(Name):
     print ("Finished updating. Thank you for waiting. Enjoy!")
     print ''
     return render_template('root.html')
+ 
+#Download images from Erolord   
+@app.route('/erolord/<Keyword>')    
+def ErolordScraping(Keyword):
+    #baseurl will be built using the keyword. This is the starting position of the algorithm a.k.a first page of erolord.com with keyword
+    BaseURL = 'http://erolord.com/parody/' + Keyword + '/'
+    print BaseURL
+    #Opening base url in command line to start scraping its data
+    HtmlFile = urllib.urlopen(BaseURL).read()
+    soup = BeautifulSoup(HtmlFile)
+        
+    #Section to figure out how many pages this keyword in erolord has
+    SoupLinkTags = soup.find_all('a',{'class':'last'},href=True)
+    for line in SoupLinkTags:
+        BaseURLwithpages = BaseURL+'page/'
+        NumberofPages = line['href'].replace(BaseURLwithpages,'')
+        FinalNumberofPages = int(NumberofPages.replace('/',''))
+        print ('Number of pages: '+str(FinalNumberofPages))
+        
+    #Now that we know number of pages we can find all the links with it
+    MacroPageURLS = []
+    counter = 1
+    while counter<(FinalNumberofPages+1):
+        CurrentPage = BaseURL+'page/'+str(counter)
+        MacroPageURLS.append(CurrentPage)
+        counter+=1
     
+    for owo in MacroPageURLS:
+        print owo
+    #Now we have to go to each of these pages and find all img links
+    UniqueImgPageURLS = []
+    i=0
+    while i<len(MacroPageURLS):
+        print 'Opening Page URL: '+str(MacroPageURLS[i])
+        htmlf = urllib.urlopen(MacroPageURLS[i]).read()
+        soup2 = BeautifulSoup(htmlf)
+        LinkTags = soup2.find_all('a',{'class':'aa1'},href=True)
+        for stuff in LinkTags:
+            UniqueImgPageURLS.append(stuff['href'])
+            print 'Added img link'
+            
+        i+=1
+    print ''
+    print 'These are all the unique image links for '+str(Keyword)
+    for q in UniqueImgPageURLS:
+        print q
     
+    #Now we have to open each of these individual links and download the biggest image from in it
     
+    #First lets make the file directory to store these images
+    CreateNewpath = "C:\Python27\Images\EROLORD\\"+str(Keyword)
+    print 'Path to store images: '+CreateNewpath
+    newpath = CreateNewpath
+    
+    if not os.path.exists(newpath):
+        os.makedirs(newpath)
+    MyPath = newpath                        #This is one half of where it will be stored, the name of file still has to be genrated with Name variable
+    Name = 0
+    
+    print ''
+    print 'Initialising Download of images'
+    print 'Initialising Download of images'
+    print 'Initialising Download of images'
+    print ''
+    
+    #Now to open each of these links and grab the image in them
+    thing=0
+    while thing<len(UniqueImgPageURLS):
+        NewHtml = urllib.urlopen(UniqueImgPageURLS[thing]).read()
+        soup3 = BeautifulSoup(NewHtml)
+        ImgTag = soup3.find_all('img',{'class':'mainimg'},src=True)
+        print 'On Loop number: ' + str(thing)
+        
+        for t in ImgTag:
+            #The name should be incremental from 0 to infinity with.jpg at end
+            Full_name = str(Name) + ".jpg"
+            urllib.urlretrieve(t['src'], os.path.join(MyPath, (Full_name)))
+            print t['src']
+            
+        thing +=1
+        Name +=1
+    
+    print ('FINISHED DOWNLOADING ALL ENJOY')
+    return render_template('root.html')
     
     
 # Run the app
