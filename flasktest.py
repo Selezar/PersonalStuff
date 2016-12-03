@@ -1,5 +1,6 @@
 '''
-This is a flask file containing a lot of useful and experimental web scraping code. Everything is mainly placed here so that the user can use the browser as an interface and not need to create a custom GUI with Tkinter. Websites scraped include Erolord,HentaiBox,Tumblr.
+This is a flask file containing a lot of useful and experimental web scraping code. Everything is mainly placed here so that the user can use the
+browser as an interface and not need to create a custom GUI with Tkinter. Websites scraped include Erolord,HentaiBox,Tumblr and ImageFap.
 Another function included edits text file as well. This code also exercises and implements historic record management of code with text files
 
 '''
@@ -794,8 +795,102 @@ def UpdateDownloadFolder(Name):
     return render_template('root.html')
  
 #Download images from Erolord   
-@app.route('/erolord/<Keyword>')    
+@app.route('/erolord/<Keyword>')
 def ErolordScraping(Keyword):
+    #baseurl will be built using the keyword. This is the starting position of the algorithm a.k.a first page of erolord.com with keyword
+    BaseURL = 'http://erolord.com/parody/' + Keyword + '/'
+    print BaseURL
+    #Opening base url in command line to start scraping its data
+    HtmlFile = urllib.urlopen(BaseURL).read()
+    soup = BeautifulSoup(HtmlFile)
+        
+    #Section to figure out how many pages this keyword in erolord has
+    ArrayOfPageNumbers = []
+    SoupLinkTagswithLast = soup.find_all('a',{'class':'last'})
+    SoupLinkTagswithPageLarger = soup.find_all('a',{'class':'page larger'},href=True)
+    for line in SoupLinkTagswithLast:
+        print line['href']
+        BaseURLwithpages = BaseURL+'page/'
+        NumberofPages = line['href'].replace(BaseURLwithpages,'')
+        FinalNumberofPages = int(NumberofPages.replace('/',''))
+        ArrayOfPageNumbers.append(FinalNumberofPages)
+       
+    for owo in SoupLinkTagswithPageLarger:
+        print owo['href']
+        BaseURLwithpages = BaseURL+'page/'
+        NumberofPages = owo['href'].replace(BaseURLwithpages,'')
+        FinalNumberofPages = int(NumberofPages.replace('/',''))
+        ArrayOfPageNumbers.append(FinalNumberofPages)
+        
+    for lolo in ArrayOfPageNumbers:
+        print lolo
+        
+        NUMPAGE = max(ArrayOfPageNumbers)
+        
+    #Now that we know number of pages we can find all the links with it
+    MacroPageURLS = []
+    counter = 1
+    while counter<(NUMPAGE+1):
+        CurrentPage = BaseURL+'page/'+str(counter)
+        MacroPageURLS.append(CurrentPage)
+        counter+=1
+    
+    for owo in MacroPageURLS:
+        print owo
+    #Now we have to go to each of these pages and find all img links
+    UniqueImgPageURLS = []
+    i=0
+    while i<len(MacroPageURLS):
+        print 'Opening Page URL: '+str(MacroPageURLS[i])
+        htmlf = urllib.urlopen(MacroPageURLS[i]).read()
+        soup2 = BeautifulSoup(htmlf)
+        LinkTags = soup2.find_all('a',{'class':'aa1'},href=True)
+        for stuff in LinkTags:
+            UniqueImgPageURLS.append(stuff['href'])
+            print 'Added img link'
+            
+        i+=1
+    print ''
+    print 'These are all the unique image links for '+str(Keyword)
+    for q in UniqueImgPageURLS:
+        print q
+    
+    #Now we have to open each of these individual links and download the biggest image from in it
+    
+    #First lets make the file directory to store these images
+    CreateNewpath = "C:\Python27\Images\EROLORD\\"+str(Keyword)
+    print 'Path to store images: '+CreateNewpath
+    newpath = CreateNewpath
+    
+    if not os.path.exists(newpath):
+        os.makedirs(newpath)
+    MyPath = newpath                        #This is one half of where it will be stored, the name of file still has to be genrated with Name variable
+    Name = 0
+    
+    print ''
+    print 'Initialising Download of images'
+    print 'Initialising Download of images'
+    print 'Initialising Download of images'
+    print ''
+    
+    #Now to open each of these links and grab the image in them
+    thing=0
+    while thing<len(UniqueImgPageURLS):
+        NewHtml = urllib.urlopen(UniqueImgPageURLS[thing]).read()
+        soup3 = BeautifulSoup(NewHtml)
+        ImgTag = soup3.find_all('img',{'class':'mainimg'},src=True)
+        print 'On Loop number: ' + str(thing)
+        
+        for t in ImgTag:
+            #The name should be incremental from 0 to infinity with.jpg at end
+            Full_name = str(Name) + ".jpg"
+            urllib.urlretrieve(t['src'], os.path.join(MyPath, (Full_name)))
+            print t['src']
+            
+        thing +=1
+        Name +=1
+    
+    print ('FINISHED DOWNLOADING ALL ENJOY')
     #baseurl will be built using the keyword. This is the starting position of the algorithm a.k.a first page of erolord.com with keyword
     BaseURL = 'http://erolord.com/parody/' + Keyword + '/'
     print BaseURL
@@ -876,8 +971,102 @@ def ErolordScraping(Keyword):
     
     print ('FINISHED DOWNLOADING ALL ENJOY')
     return render_template('root.html')
+
+#Download stuff from imagefap
+@app.route('/ImageFap/<Keyword>/<PageLimit>')    
+def ImageFapScraping(Keyword,PageLimit):
+        
+    #Section to figure out how many pages this keyword in erolord has
+    ArrayOfPages = []
     
+    walao = 0
+    while walao<int(PageLimit):
+        thisvar = 'http://www.imagefap.com/gallery.php?search='+str(Keyword)+'&page=' + str(walao) + '&submitbutton=Search%21&filter_size=&filter_date='
+        walao+=1
+        ArrayOfPages.append(thisvar)
     
+    for qq in ArrayOfPages:
+        print qq
+        
+    GalleryTitleLinkTags = []    
+    #Now we go to each of these front pages and get the links of each heading
+    for waka in range(len(ArrayOfPages)):
+        OpenHtml = urllib.urlopen(ArrayOfPages[waka]).read()
+        soup1 = BeautifulSoup(OpenHtml,'html.parser')
+        ThisLinkTag = soup1.find_all('a',{'class':'gal_title'},href=True)
+        for werty in ThisLinkTag:
+            if '/profile' not in werty['href']:
+                try:
+                    AddedWithDomain = 'http://www.imagefap.com' + werty['href'] + '&view=2'
+                    GalleryTitleLinkTags.append(AddedWithDomain)
+                except:
+                    pass
+            
+    for stuff in GalleryTitleLinkTags:
+        print stuff
+        
+    MegaImgLinkList = []
+    #Now we have to go to each of these heading galleies and add each image page link to main pageurl list
+    for cnt in range(len(GalleryTitleLinkTags)):
+        htmlfile = urllib.urlopen(GalleryTitleLinkTags[cnt]).read()
+
+        soup = BeautifulSoup(htmlfile,'html.parser')
+
+
+        Linktag = soup.find_all('div',{'id':'gallery'})
+
+        for line in Linktag:
+            Atag = line.find_all('a',href=True)
+            for z in Atag:
+                print 'http://www.imagefap.com'+ z['href']
+                MegaImgLinkList.append('http://www.imagefap.com'+z['href'])
+
+    
+    for po in MegaImgLinkList:
+        print po
+    
+    #Now we can start grabbing the img from each of these pages
+
+    
+    #First lets make the file directory to store these images
+    CreateNewpath = "C:\Python27\Images\ImageFap\\"+str(Keyword)
+    print 'Path to store images: '+CreateNewpath
+    newpath = CreateNewpath
+    
+    if not os.path.exists(newpath):
+        os.makedirs(newpath)
+    MyPath = newpath                        #This is one half of where it will be stored, the name of file still has to be genrated with Name variable
+    Name = 0
+    
+    print ''
+    print 'Initialising Download of images'
+    print 'Initialising Download of images'
+    print 'Initialising Download of images'
+    print ''
+    
+    #Now to open each of these links and grab the image in them
+    thing=0
+    while thing<len(MegaImgLinkList):
+        try:
+            NewHtml = urllib.urlopen(MegaImgLinkList[thing]).read()
+            soup3 = BeautifulSoup(NewHtml,'html.parser')
+            ImgTag = soup3.find_all('img',src=True)
+            for line in ImgTag:
+                if 'http://' in line['src'] and 'thumb' not in line['src'] and 'ip.gif' not in line['src']and 'xorigin.fap.to' not in line['src']:
+                    print line['src']
+    
+                    #The name should be incremental from 0 to infinity with.jpg at end
+                    Full_name = str(Name) + ".jpg"
+                    urllib.urlretrieve(line['src'], os.path.join(MyPath, (Full_name)))
+        except:
+            pass
+        thing +=1
+        Name +=1
+    
+    print ('FINISHED DOWNLOADING ALL ENJOY')
+    return render_template('root.html')
+
+
 # Run the app
 if __name__ == "__main__":
 
