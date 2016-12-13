@@ -1,6 +1,6 @@
 '''
 This is a flask file containing a lot of useful and experimental web scraping code. Everything is mainly placed here so that the user can use the
-browser as an interface and not need to create a custom GUI with Tkinter. Websites scraped include Erolord,HentaiBox,Tumblr and ImageFap.
+browser as an interface and not need to create a custom GUI with Tkinter. Websites scraped include Tumblr.
 Another function included edits text file as well. This code also exercises and implements historic record management of code with text files
 
 '''
