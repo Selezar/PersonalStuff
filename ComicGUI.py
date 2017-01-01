@@ -125,8 +125,8 @@ class ComicGui():
         self.smallCounter = 0
         self.biggerCounter = 0
 
-        #Threadstuff
-        self.pool = ThreadPool(processes=1)
+        #Threadstuff for $GE
+        
         self.SelectedComicPages = []            #this is the current comic list which has all the img links in it
         self.NextComicImgLinks = []             #this is the next comic in the list with all its img links in it
         self.CurrentTitleURL = ''                    #This is current comic url
@@ -135,8 +135,13 @@ class ComicGui():
         self.TitlesCached = []                  #These are all the titles already downloaded into cache
         self.TitlesToDownload = []              #These are the titles that are yet to be downloaded
 
-        self.TotalTitleLinks = []               #This will have smaller lists inside which will each hold separate comic titles
+        self.TotalTitleImgLinksCache = []               #This will have smaller lists inside which will each hold separate comic titles
 
+        #Threadstuff for hbox
+        self.ImgURLCache = []                  #This will have already downloaded image urls
+        self.ImgPILCache = []                  #This will have the actual download PIL img objects
+
+        self.ImgDlqueue = []                    #These are the img urls yet to be downloaded        
 
     def LoadTitle(self):
         '''
@@ -159,6 +164,12 @@ class ComicGui():
             '''
             self.TitleList = FetchSearchedHBOXTitles(self.EnteredKeyWord[8:])
             self.InsertIntoList( self.GuiTitleList, 0, self.TitleList)
+
+            self.TitlesToDownload = self.TitleList
+
+            #----------------------concurrently downloading and cataloguing all the titles---------------------------#
+            self.TitlePool = ThreadPool(processes=1)
+            self.async_Title = self.TitlePool.apply_async(self.HboxThreadingTITLEDL)
 
         elif '!series' in self.EnteredKeyWord:
             '''
@@ -212,34 +223,83 @@ class ComicGui():
             '''
             This is for hbox tags
             '''
-            self.SelectedComicPages = FetchImageLinks(value)
-            self.Total_Comic_Pg_Num = len(self.SelectedComicPages)
+            self.CurComicStr.set(value)         #this sets the current chosen comic title onto the label
 
-            #Deleting prvious pages from the list
-            self.ComicPages.delete(0,END)
+            if value not in self.TitlesCached:
+                '''This means the title is not cached in memory so have to manually dl it now'''
 
-            self.InsertIntoList(self.ComicPages, 0, self.SelectedComicPages)
-            #Setting the selection to be the first automatically
-            self.ComicPages.selection_set(0,0)
-            #loading first page of comic automatically
-            self.AutoLoadFirstPageComic()
+                self.SelectedComicPages = FetchImageLinks(value)            #This is the array containing all the image urls
+
+                self.ImgDlqueue = self.SelectedComicPages
+
+                self.Total_Comic_Pg_Num = len(self.SelectedComicPages)
+                self.PgDescrip.set('Pages: '+str(self.Total_Comic_Pg_Num))
+
+                #Deleting prvious pages from the list
+                self.ComicPages.delete(0,END)
+
+                self.InsertIntoList(self.ComicPages, 0, self.SelectedComicPages)
+                #Setting the selection to be the first automatically
+                self.ComicPages.selection_set(0,0)
+                #loading first page of comic automatically
+                self.AutoLoadFirstPageComic()
+
+                #---------------------Start concurrent thread for img PIL objects-----------------------------------#
+                self.pool = ThreadPool(processes=1)
+                self.async_result = self.pool.apply_async(self.HboxThreadingImgDL)
+
+            elif value in self.TitlesCached:
+                '''This means the title has already been downloaded and cached in the background'''
+
+                IndexVal = self.TitlesCached.index(value)
+
+                self.SelectedComicPages = self.TotalTitleImgLinksCache[IndexVal]
+
+                self.ImgDlqueue = self.SelectedComicPages
+
+                self.Total_Comic_Pg_Num = len(self.SelectedComicPages)
+                self.PgDescrip.set('Pages: '+str(self.Total_Comic_Pg_Num))
+
+                #Deleting prvious pages from the list
+                self.ComicPages.delete(0,END)
+
+                self.InsertIntoList(self.ComicPages, 0, self.SelectedComicPages)
+                #Setting the selection to be the first automatically
+                self.ComicPages.selection_set(0,0)
+                #loading first page of comic automatically
+                self.AutoLoadFirstPageComic()
+
+                #---------------------Start concurrent thread for img PIL objects-----------------------------------#
+                self.pool = ThreadPool(processes=1)
+                self.async_result = self.pool.apply_async(self.HboxThreadingImgDL)
 
         elif '$GE' in self.EnteredKeyWord:
             '''
             This is for g.e.hentai.org tags
             '''
+            #this will clear out the todownload array
+
+            self.TitlesToDownload = []
+
             
             #Removing the name part from title by using the triple $$$ signs and getting the title url
             self.CurrentTitleURL = value[value.index('$$$')+4:]
             self.CurComicStr.set(value[0:value.index('$$$')])
 
-            if self.CurrentTitleURL!=self.NextTitleURL:
+            if self.CurrentTitleURL not in self.TitlesCached:
                 '''
-                this means the user has not chosen the next comic in the list but a random one
+                this means the user has not chosen the next comic in the list but a random one not in the cache
                 '''
                 #The next title to the chosen one
-                NextValue = widget.get(selection[0]+1)
-                self.NextTitleURL = NextValue[NextValue.index('$$$')+4:]
+                for i in range(1,4):
+
+                    NextValue = widget.get(selection[0]+i)
+                    if NextValue == None:
+                        break
+
+                    self.NextTitleURL = NextValue[NextValue.index('$$$')+4:]
+                    if self.NextTitleURL not in self.TitlesToDownload and self.NextTitleURL not in self.TitlesCached:
+                        self.TitlesToDownload.append(self.NextTitleURL)
 
                 self.ComObj = Comic(self.CurrentTitleURL)
                 #fetching all the img links this comic has
@@ -259,18 +319,32 @@ class ComicGui():
                 self.AutoLoadFirstPageComic()
 
                 #---------------------Section to start the threading to fect comic images from next title concurrently-----------------------#
+                self.pool = ThreadPool(processes=1)
                 self.async_result = self.pool.apply_async(self.ThreadComic )
                 
 
-            elif self.CurrentTitleURL==self.NextTitleURL:
+            elif self.CurrentTitleURL in self.TitlesCached:
                 '''
-                this means the user has chosen the next comic in the list so can be loaded from memory instead of fetching it
+                this means the user has chosen the next comic in the list or one in the cache so can be loaded from memory instead of fetching it
                 '''
-                NextValue = widget.get(selection[0]+1)
-                self.NextTitleURL = NextValue[NextValue.index('$$$')+4:]
+                for i in range(1,4):
+                    NextValue = widget.get(selection[0]+i)
+                    if NextValue ==None:
+                        break
+    
+                    self.NextTitleURL = NextValue[NextValue.index('$$$')+4:]
+                    if self.NextTitleURL not in self.TitlesToDownload and self.NextTitleURL not in self.TitlesCached:
+                        self.TitlesToDownload.append(self.NextTitleURL)
 
                 #fetching it from the stored concurrent process started b4
-                self.NextComicImgLinks = self.async_result.get()
+                print ('starting retrieval')
+                #Need to first find out what index the title to be searched is in
+                IndexOfCurrentTitle = self.TitlesCached.index(self.CurrentTitleURL)
+                print ('Chosen title index in array is: '+str(IndexOfCurrentTitle))
+                #Now fetch this index
+                self.NextComicImgLinks = self.TotalTitleImgLinksCache[IndexOfCurrentTitle]
+                #self.NextComicImgLinks = self.async_result.get()
+                print ('finished retrieval from memory')
                 #fetching all the img links this comic has
                 self.SelectedComicPages = self.NextComicImgLinks
                 #Finding how many pages this comic has
@@ -281,13 +355,16 @@ class ComicGui():
                 #Deleting prvious pages from the list
                 self.ComicPages.delete(0,END)
 
+                print ('inserting them into list')
                 self.InsertIntoList(self.ComicPages, 0, self.SelectedComicPages)
                 #Setting the selection to be the first automatically
                 self.ComicPages.selection_set(0,0)
                 #loading first page of comic automatically
+                print ('autoloading first img')
                 self.AutoLoadFirstPageComic()
 
                 #---------------------Section to start the threading to fect comic images from next title concurrently-----------------------#
+                self.pool = ThreadPool(processes=1)
                 self.async_result = self.pool.apply_async(self.ThreadComic)
 
 
@@ -299,6 +376,7 @@ class ComicGui():
             self.SelectedComicPages = ReturnImgSources(value)
             self.Total_Comic_Pg_Num = len(self.SelectedComicPages)
 
+            self.CurComicStr.set(value)
             self.TotalPages = len(self.SelectedComicPages)
             self.PgDescrip.set('Pages: '+str(self.TotalPages))  #setting total page label
             #Deleting prvious pages from the list
@@ -333,8 +411,10 @@ class ComicGui():
         '''
 
         self.img = Image.open(BytesIO(content))
+
         self.GlobImg = self.img
         self.photo = ImageTk.PhotoImage(self.img)
+
 
         self.MyCanvas = self.cv.create_image(10, 10, image=self.photo, anchor='nw')
 
@@ -354,7 +434,14 @@ class ComicGui():
             self.PageCounter+=1
             self.CurPgDescr.set(str(self.PageCounter))
 
-            self.response = requests.get(value)
+            if value in self.ImgURLCache:
+                #First need to find the index this url is in
+                IndexOfURL = self.ImgURLCache.index(value)
+
+                self.response = self.ImgPILCache[IndexOfURL]
+            else:
+                self.response = requests.get(value)
+
             #Placing the image onto canvas
             self.Place_ImageContent_2Canvas(self.response.content)
 
@@ -370,7 +457,14 @@ class ComicGui():
             itemSelected = self.ComicPages.curselection()
             value = self.ComicPages.get(itemSelected[0])
 
-            self.response = requests.get(value)
+            if value in self.ImgURLCache:
+                #First need to find the index this url is in
+                IndexOfURL = self.ImgURLCache.index(value)
+
+                self.response = self.ImgPILCache[IndexOfURL]
+            else:
+                self.response = requests.get(value)
+
             #Placing the image onto canvas
             self.Place_ImageContent_2Canvas(self.response.content)
 
@@ -390,7 +484,14 @@ class ComicGui():
             self.PageCounter-=1
             self.CurPgDescr.set(str(self.PageCounter))
 
-            self.response = requests.get(value)
+            if value in self.ImgURLCache:
+                #First need to find the index this url is in
+                IndexOfURL = self.ImgURLCache.index(value)
+
+                self.response = self.ImgPILCache[IndexOfURL]
+            else:
+                self.response = requests.get(value)
+
             #Placing the image onto canvas
             self.Place_ImageContent_2Canvas(self.response.content)
 
@@ -406,7 +507,14 @@ class ComicGui():
             itemSelected = self.ComicPages.curselection()
             value = self.ComicPages.get(itemSelected[0])
 
-            self.response = requests.get(value)
+            if value in self.ImgURLCache:
+                #First need to find the index this url is in
+                IndexOfURL = self.ImgURLCache.index(value)
+
+                self.response = self.ImgPILCache[IndexOfURL]
+            else:
+                self.response = requests.get(value)
+
             #Placing the image onto canvas
             self.Place_ImageContent_2Canvas(self.response.content)
 
@@ -446,7 +554,14 @@ class ComicGui():
         self.ImgWidth = self.ImgDimensions[0]
         self.ImgHeight = self.ImgDimensions[1]
         
-        self.response = requests.get(value)
+        if value in self.ImgURLCache:
+            #First need to find the index this url is in
+            IndexOfURL = self.ImgURLCache.index(value)
+
+            self.response = self.ImgPILCache[IndexOfURL]
+        else:
+            self.response = requests.get(value)
+
         #Placing the image onto canvas
         self.Place_ImageContent_2Canvas(self.response.content)
 
@@ -499,10 +614,84 @@ class ComicGui():
         Concurrent function to crawl the website and keep extracting img urls from nearest titles in the background
         '''
         print ('Starting thread....')
-        MyComic = Comic(self.NextTitleURL)
-        ImgLinks = MyComic.GetImageLinks()
-        print ('Finished Concurrent thread...')
-        return ImgLinks
+
+        print ('Titlestodownload:')
+        print (self.TitlesToDownload)
+        print ('---------------------------')
+        print ('self.TitlesCached:')
+        print (self.TitlesCached)
+
+        for thisTitle in self.TitlesToDownload:
+
+            print ('Working with current title: '+thisTitle)
+
+            if thisTitle not in self.TitlesCached:  #Checking to see that the title has not been downloaded already
+                print ('Fetching images from title: '+str(thisTitle))
+                MyComic = Comic(thisTitle)
+                ImgLinks = MyComic.GetImageLinks()
+
+                self.TotalTitleImgLinksCache.append(ImgLinks)
+
+                print ('Finished adding '+str(thisTitle)+' to cache')
+
+                self.TitlesCached.append(thisTitle)
+                print ('2beDled: '+str(self.TitlesToDownload))
+                print ('')
+                print ('cache: '+str(self.TitlesCached))
+               
+
+        print ('Thread exited')
+        for cached in self.TitlesCached:
+            self.TitlesToDownload.remove(cached)
+            print ('Removed this from 2be dled array: '+str(cached))
+
+        self.pool.close()
+        print ('pool closed')
+        self.pool.terminate()
+        print ('pool terminated')
+        self.pool.join()
+        print ('pools joined')
+        
+
+    def HboxThreadingImgDL(self):
+        '''
+            this function will in the background keep downloading and requesting all the coming image urls into PIL objects
+        '''
+        print ('Starting thread')
+        TempList = self.ImgDlqueue
+        for ImgInstance in TempList:
+
+            if ImgInstance not in self.ImgURLCache:
+                print ('Working currently with url: '+str(ImgInstance))
+                self.response = requests.get(ImgInstance)
+
+                self.ImgPILCache.append(self.response)
+                self.ImgURLCache.append(ImgInstance)
+
+
+        print ('Setting ImgDlqueue to be zero now')
+        self.ImgDlqueue = list(set(self.ImgDlqueue)-set(TempList))
+        print (self.ImgDlqueue)
+
+
+    def HboxThreadingTITLEDL(self):
+        '''
+        Concurrent function to one by one generate all image links from the list of total titles
+        '''
+        print ('Starting thread and downloading for: '+str(self.TitlesToDownload))
+        for ThisTitle in self.TitlesToDownload:
+
+            if ThisTitle not in self.TitlesCached:
+                try:
+                    TempImgList = FetchImageLinks(ThisTitle)
+                except:
+                    pass
+
+                self.TotalTitleImgLinksCache.append(TempImgList)
+                self.TitlesCached.append(ThisTitle)   
+
+        print ('Finished cacheing all titles. Now setting the dl que to zero..')
+        self.TitlesToDownload = []
 
 
 def DownloadComic(FinalURL):
