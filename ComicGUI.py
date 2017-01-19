@@ -20,6 +20,9 @@ Added page numbers and converted ge hentai org to be class based
 Must add dl function from gehentai as well
 
 To speed up added threading where the next comic to the chosen one in ge hentai is automatically dowwnloaded concurrently into a cache. Could do it for all.
+Successfully added it to it. Now this is a bit too fast. Renamed file to U L T R A  T H R E A D I N G  because why not. Must say this was a valuable learning experience with threading and concurrency.
+
+Added thumbnails
 '''
 
 
@@ -31,7 +34,6 @@ from PIL import Image,ImageTk
 from io import BytesIO
 import requests
 from Hbox import *
-import multiprocessing
 import os
 import random
 from operator import add
@@ -49,24 +51,59 @@ class ComicGui():
         self.window.wm_iconbitmap('fleurdelys label.ico')
 
         self.ControlFrame = tkinter.Frame(window)
-        self.ControlFrame.place(height=1200, width=3200)
+        self.ControlFrame.pack(anchor=NE , side=RIGHT, fill=X)
 
-        self.LoadTitleButton = tkinter.Button(self.ControlFrame, text='Populate Titles', command=self.LoadTitle)      #Clicking this button will populate the title list with all the titles
+        self.Root_Thumbnail_Frame = tkinter.Frame(window)
+        self.Root_Thumbnail_Frame.pack(anchor=SE, side=RIGHT, expand=1)
+
+        self.TitleFrame = tkinter.Frame(self.ControlFrame)
+        self.TitleFrame.pack()
+
+        self.ComicPageFrame = tkinter.Frame(self.ControlFrame)
+        self.ComicPageFrame.pack()
+
+        self.ImageFrame = tkinter.Frame(window)
+        self.ImageFrame.pack(anchor=W, side=LEFT, expand=1, fill=BOTH)
+
+
+        self.Thumbnail1_Frame = tkinter.Frame(self.Root_Thumbnail_Frame)
+        self.Thumbnail1_Frame.pack()
+
+        self.Thumbnail2_Frame = tkinter.Frame(self.Root_Thumbnail_Frame)
+        self.Thumbnail2_Frame.pack()
+
+        self.Thumbnail3_Frame = tkinter.Frame(self.Root_Thumbnail_Frame)
+        self.Thumbnail3_Frame.pack()
+
+        self.Thumbnail4_Frame = tkinter.Frame(self.Root_Thumbnail_Frame)
+        self.Thumbnail4_Frame.pack()
+
+        self.Thumbnail5_Frame = tkinter.Frame(self.Root_Thumbnail_Frame)
+        self.Thumbnail5_Frame.pack()
+
+        self.LoadTitleButton = tkinter.Button(self.TitleFrame, text='Populate Titles', command=self.LoadTitle)      #Clicking this button will populate the title list with all the titles
         self.LoadTitleButton.pack()
 
-        self.keywordEntry = tkinter.Entry(self.ControlFrame)           #Entry box to enter root keyword
+        self.keywordEntry = tkinter.Entry(self.TitleFrame)           #Entry box to enter root keyword
         self.keywordEntry.pack()
 
-        self.GuiTitleList = tkinter.Listbox(self.ControlFrame, width=100, height=15)         # title list that will hold all the titles of the comics
-        self.GuiTitleList.bind("<ButtonRelease-1>", self.OnSingle)
-        self.GuiTitleList.pack()
+        self.TitleVbar=Scrollbar(self.TitleFrame, orient=VERTICAL)   #For gui title list
+        self.TitleVbar.pack(side=RIGHT, fill=Y, expand=1)
 
-        self.ComicPages = tkinter.Listbox(self.ControlFrame, width=80)
+        self.GuiTitleList = tkinter.Listbox(self.TitleFrame, width=100, height=15, yscrollcommand=self.TitleVbar.set)         # title list that will hold all the titles of the comics
+        self.GuiTitleList.bind("<ButtonRelease-1>", self.OnSingle)
+        self.GuiTitleList.pack(side=LEFT)
+
+        self.TitleVbar.config(command=self.GuiTitleList.yview)
+
+        self.ComicVbar=Scrollbar(self.ComicPageFrame, orient=VERTICAL)   #For gui title list
+        self.ComicVbar.pack(side=RIGHT, fill=Y, expand=1)
+
+        self.ComicPages = tkinter.Listbox(self.ComicPageFrame, width=90,  yscrollcommand=self.ComicVbar.set)
         self.ComicPages.bind("<ButtonRelease-1>", self.OnDouble)
         self.ComicPages.pack()
 
-        self.DownloadButton = tkinter.Button(self.ControlFrame, text='D O W N L O A D', command=self.GuiDownloadHandler)  #Clicking this button will go to next page of comic
-        self.DownloadButton.pack()
+        self.ComicVbar.config(command=self.ComicPages.yview)
 
         self.ZoomInButton = tkinter.Button(self.ControlFrame, text='+', command=self.ZoomIn)  #Clicking this button will go to next page of comic
         self.ZoomInButton.pack()
@@ -89,17 +126,17 @@ class ComicGui():
         self.CurrentComiclabel.pack()
         self.CurComicStr.set('')
 
-        self.hbar=Scrollbar(window, orient=HORIZONTAL)
-        self.hbar.grid(row=2, column=0)
+        self.hbar=Scrollbar(self.ImageFrame, orient=HORIZONTAL)
+        self.hbar.pack(side=BOTTOM, fill=X, expand=1)
 
 
-        self.vbar=Scrollbar(window, orient=VERTICAL)
-        self.vbar.grid(row=0, column=1)
+        self.vbar=Scrollbar(self.ImageFrame, orient=VERTICAL)   #For canvas
+        self.vbar.pack(side=RIGHT, fill=Y, expand=1)
 
-        self.cv = tkinter.Canvas(window,bg='black',scrollregion=(0,0,2000,2000), width=1200, height=1000, xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
+        self.cv = tkinter.Canvas(self.ImageFrame,bg='black',scrollregion=(0,0,2000,2000), width=1100, height=1000, xscrollcommand=self.hbar.set, yscrollcommand=self.vbar.set)
         self.cv.bind("<Button-1>", self.LoadNextPageEvent)
         self.cv.bind("<Button-3>", self.LoadPrevPageEvent)
-        self.cv.grid(row=0, column=0)
+        self.cv.pack(anchor=W, side=LEFT, expand=1)
 
         self.hbar.config(command=self.cv.xview)
         self.vbar.config(command=self.cv.yview)
@@ -119,7 +156,23 @@ class ComicGui():
 
         self.photo = ImageTk.PhotoImage(self.img)
 
-        self.MyCanvas = self.cv.create_image(10, 10, image=self.photo, anchor='nw')
+        self.MyCanvas = self.cv.create_image(10, 10, image = self.photo, anchor = 'nw')
+
+        '''Creating thumbail canvases for all 5 thumbnails'''
+        self.T1_CV = tkinter.Canvas(self.Thumbnail1_Frame,bg='black', width=163, height=197) 
+        self.T1_CV.pack(side=LEFT)
+
+        self.T2_CV = tkinter.Canvas(self.Thumbnail2_Frame,bg='black', width=163, height=197) 
+        self.T2_CV.pack(side=LEFT)
+
+        self.T3_CV = tkinter.Canvas(self.Thumbnail3_Frame,bg='black', width=163, height=197) 
+        self.T3_CV.pack(side=LEFT)
+
+        self.T4_CV = tkinter.Canvas(self.Thumbnail4_Frame,bg='black', width=163, height=197) 
+        self.T4_CV.pack(side=LEFT)
+
+        self.T5_CV = tkinter.Canvas(self.Thumbnail5_Frame,bg='black', width=163, height=197) 
+        self.T5_CV.pack(side=LEFT)
 
         #Zoom stuff
         self.smallCounter = 0
@@ -143,6 +196,8 @@ class ComicGui():
 
         self.ImgDlqueue = []                    #These are the img urls yet to be downloaded        
 
+
+
     def LoadTitle(self):
         '''
         Button function which will fetch all the titles from specified site
@@ -151,12 +206,26 @@ class ComicGui():
         #Deleting prvious pages from the list
         self.GuiTitleList.delete(0,END)
 
+        self.ImgDlqueue = [] 
+        self.TotalTitleImgLinksCache = [] 
+        self.TitlesCached = [] 
+        self.ImgURLCache = [] 
+        self.ImgPILCache = []   
+
         if '!tag' in self.EnteredKeyWord:
             '''
             For hbox titles
             '''
             self.TitleList = FetchTaggedHBOXTitles(self.EnteredKeyWord[5:])
             self.InsertIntoList( self.GuiTitleList, 0, self.TitleList)
+
+            self.TitlesToDownload = self.TitleList
+
+            #----------------------concurrently downloading and cataloguing all the titles---------------------------#
+            self.TitlePool = ThreadPool(processes=10)
+            for SingleTitle in self.TitleList:
+                
+                self.async_Title = self.TitlePool.apply_async(self.HboxThreadingTITLEDL, args=(SingleTitle,))
 
         elif '!search' in self.EnteredKeyWord:
             '''
@@ -168,8 +237,10 @@ class ComicGui():
             self.TitlesToDownload = self.TitleList
 
             #----------------------concurrently downloading and cataloguing all the titles---------------------------#
-            self.TitlePool = ThreadPool(processes=1)
-            self.async_Title = self.TitlePool.apply_async(self.HboxThreadingTITLEDL)
+            self.TitlePool = ThreadPool(processes=10)
+            for SingleTitle in self.TitleList:
+                
+                self.async_Title = self.TitlePool.apply_async(self.HboxThreadingTITLEDL, args=(SingleTitle,))
 
         elif '!series' in self.EnteredKeyWord:
             '''
@@ -177,6 +248,14 @@ class ComicGui():
             '''
             self.TitleList = FetchSeriesHBOXTitles(self.EnteredKeyWord[8:])
             self.InsertIntoList( self.GuiTitleList, 0, self.TitleList)
+
+            self.TitlesToDownload = self.TitleList
+
+            #----------------------concurrently downloading and cataloguing all the titles---------------------------#
+            self.TitlePool = ThreadPool(processes=10)
+            for SingleTitle in self.TitleList:
+                
+                self.async_Title = self.TitlePool.apply_async(self.HboxThreadingTITLEDL, args=(SingleTitle,))
 
         elif '$GE' in self.EnteredKeyWord:
             '''
@@ -226,9 +305,19 @@ class ComicGui():
             self.CurComicStr.set(value)         #this sets the current chosen comic title onto the label
 
             if value not in self.TitlesCached:
-                '''This means the title is not cached in memory so have to manually dl it now'''
+                '''This means the title is not cached in memory so have to manually download it now'''
 
                 self.SelectedComicPages = FetchImageLinks(value)            #This is the array containing all the image urls
+
+                #Fetch 5  random images to place onto thumbnail
+                randomlist = Generate_Five_Random_UniqueNums(0, len(self.SelectedComicPages)-1)
+                self.Thumb1_URL = self.SelectedComicPages[randomlist[0]]
+                self.Thumb2_URL = self.SelectedComicPages[randomlist[1]]
+                self.Thumb3_URL = self.SelectedComicPages[randomlist[2]]
+                self.Thumb4_URL = self.SelectedComicPages[randomlist[3]]
+                self.Thumb5_URL = self.SelectedComicPages[randomlist[4]]
+
+                self.LoadUpThumbnails()
 
                 self.ImgDlqueue = self.SelectedComicPages
 
@@ -244,9 +333,11 @@ class ComicGui():
                 #loading first page of comic automatically
                 self.AutoLoadFirstPageComic()
 
-                #---------------------Start concurrent thread for img PIL objects-----------------------------------#
-                self.pool = ThreadPool(processes=1)
-                self.async_result = self.pool.apply_async(self.HboxThreadingImgDL)
+                #---------------------Start concurrent thread for img PIL objects ULTRATHREADING-----------------------------------#
+                self.pool = ThreadPool(processes=20)
+                for IMGURL in self.ImgDlqueue:
+                    
+                    self.async_result = self.pool.apply_async(self.HboxThreadingImgDL, args=(IMGURL,))
 
             elif value in self.TitlesCached:
                 '''This means the title has already been downloaded and cached in the background'''
@@ -255,6 +346,16 @@ class ComicGui():
 
                 self.SelectedComicPages = self.TotalTitleImgLinksCache[IndexVal]
 
+                #Fetch 5  random images to place onto thumbnail
+                randomlist = Generate_Five_Random_UniqueNums(0, len(self.SelectedComicPages)-1)
+                self.Thumb1_URL = self.SelectedComicPages[randomlist[0]]
+                self.Thumb2_URL = self.SelectedComicPages[randomlist[1]]
+                self.Thumb3_URL = self.SelectedComicPages[randomlist[2]]
+                self.Thumb4_URL = self.SelectedComicPages[randomlist[3]]
+                self.Thumb5_URL = self.SelectedComicPages[randomlist[4]]
+
+                self.LoadUpThumbnails()
+
                 self.ImgDlqueue = self.SelectedComicPages
 
                 self.Total_Comic_Pg_Num = len(self.SelectedComicPages)
@@ -269,9 +370,11 @@ class ComicGui():
                 #loading first page of comic automatically
                 self.AutoLoadFirstPageComic()
 
-                #---------------------Start concurrent thread for img PIL objects-----------------------------------#
-                self.pool = ThreadPool(processes=1)
-                self.async_result = self.pool.apply_async(self.HboxThreadingImgDL)
+                #---------------------Start concurrent thread for img PIL objects ULTRATHREADING-----------------------------------#
+                self.pool = ThreadPool(processes=20)
+                for IMGURL in self.ImgDlqueue:
+                    
+                    self.async_result = self.pool.apply_async(self.HboxThreadingImgDL, args=(IMGURL,))
 
         elif '$GE' in self.EnteredKeyWord:
             '''
@@ -414,7 +517,6 @@ class ComicGui():
 
         self.GlobImg = self.img
         self.photo = ImageTk.PhotoImage(self.img)
-
 
         self.MyCanvas = self.cv.create_image(10, 10, image=self.photo, anchor='nw')
 
@@ -609,6 +711,29 @@ class ComicGui():
         self.newphoto = ImageTk.PhotoImage(self.img)
         self.cv.itemconfig(self.MyCanvas, image=self.newphoto)
 
+
+    def LoadUpThumbnails(self):
+        '''Function to load up the 5 thumbnail with 5 random images from the comic using threading'''
+
+        self.ThumbPool1 = ThreadPool(processes=1)
+        self.x = self.ThumbPool1.apply_async(self.Load_Thumb1)
+
+        self.ThumbPool2 = ThreadPool(processes=1)
+        self.z = self.ThumbPool2.apply_async(self.Load_Thumb2)
+
+        self.ThumbPool3 = ThreadPool(processes=1)
+        self.q = self.ThumbPool3.apply_async(self.Load_Thumb3)
+
+        self.ThumbPool4 = ThreadPool(processes=1)
+        self.w = self.ThumbPool4.apply_async(self.Load_Thumb4)
+
+        self.ThumbPool5 = ThreadPool(processes=1)
+        self.e = self.ThumbPool5.apply_async(self.Load_Thumb5)
+
+
+
+
+
     def ThreadComic(self):
         '''
         Concurrent function to crawl the website and keep extracting img urls from nearest titles in the background
@@ -653,61 +778,110 @@ class ComicGui():
         print ('pools joined')
         
 
-    def HboxThreadingImgDL(self):
+    def HboxThreadingImgDL(self, IMGURL):
         '''
             this function will in the background keep downloading and requesting all the coming image urls into PIL objects
         '''
-        print ('Starting thread')
-        TempList = self.ImgDlqueue
-        for ImgInstance in TempList:
 
-            if ImgInstance not in self.ImgURLCache:
-                print ('Working currently with url: '+str(ImgInstance))
-                self.response = requests.get(ImgInstance)
+        if IMGURL not in self.ImgURLCache:
+            print ('Working currently with url: '+str(IMGURL))
+            self.response = requests.get(IMGURL)
 
-                self.ImgPILCache.append(self.response)
-                self.ImgURLCache.append(ImgInstance)
+            self.ImgPILCache.append(self.response)
+            self.ImgURLCache.append(IMGURL)
 
 
-        print ('Setting ImgDlqueue to be zero now')
-        self.ImgDlqueue = list(set(self.ImgDlqueue)-set(TempList))
-        print (self.ImgDlqueue)
-
-
-    def HboxThreadingTITLEDL(self):
+    def HboxThreadingTITLEDL(self, Title):
         '''
         Concurrent function to one by one generate all image links from the list of total titles
         '''
-        print ('Starting thread and downloading for: '+str(self.TitlesToDownload))
-        for ThisTitle in self.TitlesToDownload:
+        print ('Starting thread and downloading for: '+str(Title))
 
-            if ThisTitle not in self.TitlesCached:
-                try:
-                    TempImgList = FetchImageLinks(ThisTitle)
-                except:
-                    pass
+        if Title not in self.TitlesCached:
+            try:
+                TempImgList = FetchImageLinks(Title)
+            except:
+                pass
 
-                self.TotalTitleImgLinksCache.append(TempImgList)
-                self.TitlesCached.append(ThisTitle)   
+            self.TotalTitleImgLinksCache.append(TempImgList)
+            self.TitlesCached.append(Title)   
 
-        print ('Finished cacheing all titles. Now setting the dl que to zero..')
-        self.TitlesToDownload = []
+        print ('Finished cacheing this particular title')
 
+    def Load_Thumb1(self):
 
-def DownloadComic(FinalURL):
-    '''
-    Outside class handler to start parallel download process
-    '''
-    print ('Starting parallel download process..')
-    p = multiprocessing.Process(target=MultiprocessDL, args=(FinalURL,))
-    p.start()
+        self.ImgDimensions1 = getImgSize(self.Thumb1_URL)
 
+        self.ImgWidth1 = self.ImgDimensions1[0]
+        self.ImgHeight1 = self.ImgDimensions1[1]
 
-def MultiprocessDL(FinalURL):  
-    '''
-    Calls the function to download a url
-    '''
-    DownloadSelectedComic(str(FinalURL))
+        self.response1 = requests.get(self.Thumb1_URL)
+        self.img1 = Image.open(BytesIO(self.response1.content))
+
+        self.img1 = self.img1.resize((round(self.ImgWidth1/6),round(self.ImgHeight1/6)), Image.ANTIALIAS)
+
+        self.photo1 = ImageTk.PhotoImage(self.img1)
+        self.T1_CV.create_image(10, 10, image=self.photo1, anchor='nw')
+
+    def Load_Thumb2(self):
+
+        self.ImgDimensions2 = getImgSize(self.Thumb2_URL)
+
+        self.ImgWidth2 = self.ImgDimensions2[0]
+        self.ImgHeight2 = self.ImgDimensions2[1]
+
+        self.response2 = requests.get(self.Thumb2_URL)
+        self.img2 = Image.open(BytesIO(self.response2.content))
+
+        self.img2 = self.img2.resize((round(self.ImgWidth2/6),round(self.ImgHeight2/6)), Image.ANTIALIAS)
+
+        self.photo2 = ImageTk.PhotoImage(self.img2)
+        self.T2_CV.create_image(10, 10, image=self.photo2, anchor='nw')
+
+    def Load_Thumb3(self):
+
+        self.ImgDimensions3 = getImgSize(self.Thumb3_URL)
+
+        self.ImgWidth3 = self.ImgDimensions3[0]
+        self.ImgHeight3 = self.ImgDimensions3[1]
+
+        self.response3 = requests.get(self.Thumb3_URL)
+        self.img3 = Image.open(BytesIO(self.response3.content))
+
+        self.img3 = self.img3.resize((round(self.ImgWidth3/6),round(self.ImgHeight3/6)), Image.ANTIALIAS)
+
+        self.photo3 = ImageTk.PhotoImage(self.img3)
+        self.T3_CV.create_image(10, 10, image=self.photo3, anchor='nw')
+
+    def Load_Thumb4(self):
+
+        self.ImgDimensions4 = getImgSize(self.Thumb4_URL)
+
+        self.ImgWidth4 = self.ImgDimensions4[0]
+        self.ImgHeight4 = self.ImgDimensions4[1]
+
+        self.response4 = requests.get(self.Thumb4_URL)
+        self.img4 = Image.open(BytesIO(self.response4.content))
+
+        self.img4 = self.img4.resize((round(self.ImgWidth4/6),round(self.ImgHeight4/6)), Image.ANTIALIAS)
+
+        self.photo4 = ImageTk.PhotoImage(self.img4)
+        self.T4_CV.create_image(10, 10, image=self.photo4, anchor='nw')
+
+    def Load_Thumb5(self):
+
+        self.ImgDimensions5 = getImgSize(self.Thumb5_URL)
+
+        self.ImgWidth5 = self.ImgDimensions5[0]
+        self.ImgHeight5 = self.ImgDimensions5[1]
+
+        self.response5 = requests.get(self.Thumb5_URL)
+        self.img5 = Image.open(BytesIO(self.response5.content))
+
+        self.img5 = self.img5.resize((round(self.ImgWidth5/6),round(self.ImgHeight5/6)), Image.ANTIALIAS)
+
+        self.photo5 = ImageTk.PhotoImage(self.img5)
+        self.T5_CV.create_image(10, 10, image=self.photo5, anchor='nw')
 
 def getImgSize(Func_url):
     '''
@@ -723,8 +897,16 @@ def getImgSize(Func_url):
 
 
 
-
-
+def Generate_Five_Random_UniqueNums(lowlimit, uplimit):
+    '''will generate 5 unique random ints'''
+    Result = []
+    while True:
+        x = random.randint(int(lowlimit) , int(uplimit) )
+        if x not in Result:
+            Result.append(x)
+        if len(Result)==5:
+            break
+    return Result
 
 
 if __name__ == '__main__':
